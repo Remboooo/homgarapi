@@ -1,13 +1,12 @@
 import binascii
-from datetime import datetime, timedelta
 import hashlib
+import logging
 import os
 import pickle
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import requests
-import logging
-
 import yaml
 
 TRACE = logging.DEBUG - 1
@@ -33,17 +32,44 @@ class HomgarDevice:
         self.mid = mid  # the unique identifier of the sensor network
         self.alerts = alerts
 
+        self.address = None
+        self.rf_rssi = None
+
     def __str__(self):
         return f"{self.FRIENDLY_DESC} \"{self.name}\" (DID {self.did})"
+
+    def get_device_status_ids(self):
+        return []
+
+    def set_device_status(self, api_obj):
+        if api_obj['id'] == f"D{self.address:02d}":
+            self._parse_status_d_value(api_obj['value'])
+
+    def _parse_status_d_value(self, val):
+        general_str, specific_str = val.split(';')
+        self._parse_general_status_d_value(general_str)
+        self._parse_device_specific_status_d_value(specific_str)
+
+    def _parse_general_status_d_value(self, s):
+        # unknowns are all '1' in my case, possibly battery state + connected state
+        unknown_1, rf_rssi, unknown_2 = s.split(',')
+        self.rf_rssi = int(rf_rssi)
+
+    def _parse_device_specific_status_d_value(self, s):
+        raise NotImplementedError()
 
 
 class HomgarHubDevice(HomgarDevice):
     def __init__(self, subdevices, **kwargs):
         super().__init__(**kwargs)
+        self.address = 1
         self.subdevices = subdevices
 
     def __str__(self):
         return f"{super().__str__()} with {len(self.subdevices)} subdevices"
+
+    def _parse_device_specific_status_d_value(self, s):
+        pass
 
 
 class HomgarSubDevice(HomgarDevice):
@@ -55,10 +81,35 @@ class HomgarSubDevice(HomgarDevice):
     def __str__(self):
         return f"{super().__str__()} at address {self.address}"
 
+    def _parse_device_specific_status_d_value(self, s):
+        pass
+
 
 class RainPointDisplayHub(HomgarHubDevice):
     MODEL_CODES = [264]
     FRIENDLY_DESC = "Irrigation Display Hub"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.wifi_rssi = None
+        self.battery_state = None
+        self.connected = None
+
+    def get_device_status_ids(self):
+        return ["connected", "state", "D01"]
+
+    def set_device_status(self, api_obj):
+        dev_id = api_obj['id']
+        val = api_obj['value']
+        if dev_id == "state":
+            self.battery_state, self.wifi_rssi = [int(s) for s in val.split(',')]
+        elif dev_id == "connected":
+            self.connected = int(val) == 1
+        else:
+            super().set_device_status(api_obj)
+
+    def _parse_device_specific_status_d_value(self, s):
+        pass
 
 
 class RainPointSoilMoistureSensor(HomgarSubDevice):
@@ -211,6 +262,7 @@ def demo(api: HomgarApi, config):
     api.ensure_logged_in(config['email'], config['password'])
     for home in api.get_homes():
         print(f"({home.hid}) {home.name}:")
+
 
         for hub in api.get_devices_for_home(home.hid):
             print(f"  - {hub}")
