@@ -34,7 +34,7 @@ class HomgarDevice:
         self.alerts = alerts
 
     def __str__(self):
-        return f"{self.FRIENDLY_DESC} \"{self.name}\""
+        return f"{self.FRIENDLY_DESC} \"{self.name}\" (DID {self.did})"
 
 
 class HomgarHubDevice(HomgarDevice):
