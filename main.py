@@ -3,6 +3,8 @@ import hashlib
 import logging
 import os
 import pickle
+import re
+from argparse import ArgumentParser
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -13,6 +15,20 @@ TRACE = logging.DEBUG - 1
 logging.addLevelName(TRACE, "TRACE")
 
 logger = logging.getLogger(Path(__file__).stem)
+
+
+STATS_VALUE_REGEX = re.compile(r'^(\d+)\((\d+)/(\d+)/(\d+)\)')
+
+
+def _parse_stats_value(s):
+    if match := STATS_VALUE_REGEX.fullmatch(s):
+        return int(match.group(1)), int(match.group(2)), int(match.group(3)), int(match.group(4))
+    else:
+        return None, None, None, None
+
+
+def _temp_to_mk(f):
+    return round(1000 * ((int(f) * .1 - 32) * 5 / 9 + 273.15))
 
 
 class HomgarHome:
@@ -81,6 +97,9 @@ class HomgarSubDevice(HomgarDevice):
     def __str__(self):
         return f"{super().__str__()} at address {self.address}"
 
+    def get_device_status_ids(self):
+        return [f"D{self.address:02d}"]
+
     def _parse_device_specific_status_d_value(self, s):
         pass
 
@@ -94,6 +113,19 @@ class RainPointDisplayHub(HomgarHubDevice):
         self.wifi_rssi = None
         self.battery_state = None
         self.connected = None
+
+        self.temp_mk_current = None
+        self.temp_mk_daily_max = None
+        self.temp_mk_daily_min = None
+        self.temp_trend = None
+        self.hum_current = None
+        self.hum_daily_max = None
+        self.hum_daily_min = None
+        self.hum_trend = None
+        self.press_pa_current = None
+        self.press_pa_daily_max = None
+        self.press_pa_daily_min = None
+        self.press_trend = None
 
     def get_device_status_ids(self):
         return ["connected", "state", "D01"]
@@ -109,27 +141,106 @@ class RainPointDisplayHub(HomgarHubDevice):
             super().set_device_status(api_obj)
 
     def _parse_device_specific_status_d_value(self, s):
-        pass
+        # 781(781/723/1),52(64/50/1),P=10213(10222/10205/1),
+        # temp[.1F](day-max/day-min/trend?),humidity[%](day-max/day-min/trend?),P=pressure[Pa](day-max/day-min/trend?),
+        temp_str, hum_str, press_str, *_ = s.split(',')
+        self.temp_mk_current, self.temp_mk_daily_max, self.temp_mk_daily_min, self.temp_trend = [_temp_to_mk(v) for v in _parse_stats_value(temp_str)]
+        self.hum_current, self.hum_daily_max, self.hum_daily_min, self.hum_trend = _parse_stats_value(hum_str)
+        self.press_pa_current, self.press_pa_daily_max, self.press_pa_daily_min, self.press_trend = _parse_stats_value(press_str[2:])
+
+    def __str__(self):
+        s = super().__str__()
+        if self.temp_mk_current:
+            s += f": {self.temp_mk_current*1e-3:.1f}K / {self.hum_current}% / {self.press_pa_current}Pa"
+        return s
 
 
 class RainPointSoilMoistureSensor(HomgarSubDevice):
     MODEL_CODES = [72]
     FRIENDLY_DESC = "Soil Moisture Sensor"
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.temp_mk_current = None
+        self.moist_percent_current = None
+        self.light_lux_current = None
+
+    def _parse_device_specific_status_d_value(self, s):
+        # 766,52,G=31351
+        # temp[.1F],soil-moisture[%],G=light[.1lux]
+        temp_str, moist_str, light_str = s.split(',')
+        self.temp_mk_current = _temp_to_mk(temp_str)
+        self.moist_percent_current = int(moist_str)
+        self.light_lux_current = int(light_str[2:]) * .1
+
+    def __str__(self):
+        s = super().__str__()
+        if self.temp_mk_current:
+            s += f": {self.temp_mk_current*1e-3-273.15:.1f}°C / {self.moist_percent_current}% / {self.light_lux_current:.1f}lx"
+        return s
+
 
 class RainPointRainSensor(HomgarSubDevice):
     MODEL_CODES = [87]
     FRIENDLY_DESC = "High Precision Rain Sensor"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.rainfall_mm_total = None
+        self.rainfall_mm_hour = None
+        self.rainfall_mm_daily = None
+        self.rainfall_mm_total = None
+
+    def _parse_device_specific_status_d_value(self, s):
+        # R=270(0/0/270)
+        # R=total?[.1mm](hour?[.1mm]/24hours?[.1mm]/7days?[.1mm])
+        self.rainfall_mm_total, self.rainfall_mm_hour, self.rainfall_mm_daily, self.rainfall_mm_7days = [.1*v for v in _parse_stats_value(s[2:])]
+
+    def __str__(self):
+        s = super().__str__()
+        if self.rainfall_mm_total:
+            s += f": {self.rainfall_mm_total}mm total / {self.rainfall_mm_hour}mm 1h / {self.rainfall_mm_daily}mm 24h / {self.rainfall_mm_7days}mm 7days"
+        return s
 
 
 class RainPointAirSensor(HomgarSubDevice):
     MODEL_CODES = [262]
     FRIENDLY_DESC = "Outdoor Air Humidity Sensor"
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.temp_mk_current = None
+        self.temp_mk_daily_max = None
+        self.temp_mk_daily_min = None
+        self.temp_trend = None
+        self.hum_current = None
+        self.hum_daily_max = None
+        self.hum_daily_min = None
+        self.hum_trend = None
+
+    def _parse_device_specific_status_d_value(self, s):
+        # 755(1020/588/1),54(91/24/1),
+        # temp[.1F](day-max/day-min/trend?),humidity[%](day-max/day-min/trend?)
+        temp_str, hum_str, *_ = s.split(',')
+        self.temp_mk_current, self.temp_mk_daily_max, self.temp_mk_daily_min, self.temp_trend = [_temp_to_mk(v) for v in _parse_stats_value(temp_str)]
+        self.hum_current, self.hum_daily_max, self.hum_daily_min, self.hum_trend = _parse_stats_value(hum_str)
+
+    def __str__(self):
+        s = super().__str__()
+        if self.temp_mk_current:
+            s += f": {self.temp_mk_current*1e-3-273.15:.1f}°C / {self.hum_current}%"
+        return s
+
 
 class RainPoint2ZoneTimer(HomgarSubDevice):
     MODEL_CODES = [261]
     FRIENDLY_DESC = "2-Zone Water Timer"
+
+    def _parse_device_specific_status_d_value(self, s):
+        # 0,9,0,0,0,0|0,1291,0,0,0,0
+        # left|right, each:
+        # ?,last-usage[.1l],?,?,?,?
+        pass
 
 
 class HomgarApiException(Exception):
@@ -247,8 +358,14 @@ class HomgarApi:
 
         return hubs
 
-    def get_device_status(self, mid):
-        return self._get_json("/app/device/getDeviceStatus", params={"mid": str(mid)})
+    def get_device_status(self, hub: HomgarHubDevice):
+        data = self._get_json("/app/device/getDeviceStatus", params={"mid": str(hub.mid)})
+        id_map = {status_id: device for device in [hub, *hub.subdevices] for status_id in device.get_device_status_ids()}
+
+        for subdevice_status in data['subDeviceStatus']:
+            device = id_map.get(subdevice_status['id'])
+            if device is not None:
+                device.set_device_status(subdevice_status)
 
     def ensure_logged_in(self, email, password):
         if (
@@ -263,15 +380,20 @@ def demo(api: HomgarApi, config):
     for home in api.get_homes():
         print(f"({home.hid}) {home.name}:")
 
-
         for hub in api.get_devices_for_home(home.hid):
             print(f"  - {hub}")
+            api.get_device_status(hub)
             for subdevice in hub.subdevices:
                 print(f"    + {subdevice}")
 
 
 def main():
-    logging.basicConfig(level=TRACE)
+    argparse = ArgumentParser(description="Demo of HomGar API client library")
+    argparse.add_argument("-v", "--verbose", action='store_true', help="Verbose (DEBUG) mode")
+    argparse.add_argument("-vv", "--very-verbose", action='store_true', help="Very verbose (TRACE) mode")
+    args = argparse.parse_args()
+
+    logging.basicConfig(level=TRACE if args.very_verbose else logging.DEBUG if args.verbose else logging.INFO)
 
     cache = {}
     try:
