@@ -68,7 +68,7 @@ class HomgarApi:
         data = self._get_json("/app/member/appHome/list")
         return [HomgarHome(hid=h.get('hid'), name=h.get('homeName')) for h in data]
 
-    def get_devices_for_home(self, hid):
+    def get_devices_for_hid(self, hid: str):
         data = self._get_json("/app/device/getDeviceByHid", params={"hid": str(hid)})
         hubs = []
 
