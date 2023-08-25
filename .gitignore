@@ -2,3 +2,4 @@
 /config.yml
 /venv/
 /.idea
+__pycache__
