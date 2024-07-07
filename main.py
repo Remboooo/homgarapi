@@ -16,7 +16,7 @@ def demo(api: HomgarApi, config):
     for home in api.get_homes():
         print(f"({home.hid}) {home.name}:")
 
-        for hub in api.get_devices_for_home(home.hid):
+        for hub in api.get_devices_for_hid(home.hid):
             print(f"  - {hub}")
             api.get_device_status(hub)
             for subdevice in hub.subdevices:
