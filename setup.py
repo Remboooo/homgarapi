@@ -14,6 +14,7 @@ setup(
     install_requires=[
         'requests>=2.0.0',
         'PyYAML>=5.0.0',
+        'platformdirs>=4.2.2',
     ],
     classifiers=[
         'Development Status :: 3 - Alpha',

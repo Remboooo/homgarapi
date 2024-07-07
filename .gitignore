@@ -1,5 +1,7 @@
 /cache.pickle
 /config.yml
-/venv/
+/venv
+/dist
 /.idea
+/homgarapi.egg-info
 __pycache__
