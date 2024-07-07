@@ -1,12 +1,22 @@
+import os
 from setuptools import setup
+from pathlib import Path
+
+# read the contents of your README file
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
+
+version = os.environ['GITHUB_REF_NAME']
 
 setup(
     name='homgarapi',
-    version='0.0.2',
+    version=version,
     description='HomGar API client',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     keywords=['homgar'],
     url='https://github.com/Remboooo/homgarapi',
-    download_url='https://github.com/Remboooo/homgarapi/archive/refs/tags/v0.0.2.tar.gz',
+    download_url=f"https://github.com/Remboooo/homgarapi/archive/refs/tags/{version}.tar.gz",
     author='Rembrand van Lakwijk',
     author_email='rem@lakwijk.com',
     license='MIT',
