@@ -2,11 +2,11 @@ from setuptools import setup
 
 setup(
     name='homgarapi',
-    version='0.0.1',
+    version='0.0.2',
     description='HomGar API client',
     keywords=['homgar'],
     url='https://github.com/Remboooo/homgarapi',
-    download_url='https://github.com/Remboooo/homgarapi/archive/refs/tags/v0.0.1.tar.gz',
+    download_url='https://github.com/Remboooo/homgarapi/archive/refs/tags/v0.0.2.tar.gz',
     author='Rembrand van Lakwijk',
     author_email='rem@lakwijk.com',
     license='MIT',
