@@ -1,6 +1,8 @@
 HomGar API client library
 =========================
 
+[![PyPI version](https://badge.fury.io/py/homgarapi.svg)](https://badge.fury.io/py/homgarapi)
+
 The purpose of this library is to programmatically control, and retrieve the layout and current values of devices 
 in the HomGar app.
 
