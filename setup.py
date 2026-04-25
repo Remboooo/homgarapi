@@ -6,7 +6,10 @@ from pathlib import Path
 this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
-version = os.environ['GITHUB_REF_NAME']
+# Prefer the GitHub Actions tag when building a release, but fall back to a
+# local version so `pip install git+...` (e.g. from a Home Assistant custom
+# integration manifest) doesn't blow up outside CI.
+version = os.environ.get('GITHUB_REF_NAME') or '0.0.0+local'
 
 setup(
     name='homgarapi',
